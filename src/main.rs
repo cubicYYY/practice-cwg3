@@ -1,4 +1,5 @@
 pub mod hashmap_macro;
+pub mod my_rc;
 pub mod my_stack;
 
 fn main() {
@@ -7,10 +8,11 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
 
     #[test]
     fn test_hash_macro() {
-        use crate::hash_map;
+        use hash_map;
         let map = hash_map! {
             "one" => 1,
             "two" => 2,
@@ -26,7 +28,7 @@ mod tests {
 
     #[test]
     fn test_my_stack() {
-        use crate::my_stack::SimpleStack;
+        use my_stack::SimpleStack;
         let stack = SimpleStack::<i32>::new();
         stack.push(1);
         stack.push(2);
@@ -40,5 +42,33 @@ mod tests {
         assert_eq!(stack.pop(), Some(4));
         assert_eq!(stack.pop(), Some(1));
         assert_eq!(stack.pop(), None);
+    }
+
+    #[test]
+    fn test_my_rc() {
+        use my_rc::MyRc;
+        {
+            let x = MyRc::new(7);
+            {
+                let y = x.clone();
+                {
+                    let z = x.clone();
+                    assert_eq!(x.ref_count(), 3);
+                    assert_eq!(y.ref_count(), 3);
+                    assert_eq!(z.ref_count(), 3);
+
+                    assert_eq!(*x, 7);
+                    assert_eq!(*y, 7);
+                    assert_eq!(*z, 7);
+                } // drop
+                assert_eq!(x.ref_count(), 2);
+                assert_eq!(y.ref_count(), 2);
+
+                assert_eq!(*x, 7);
+                assert_eq!(*y, 7);
+            } // drop
+            assert_eq!(x.ref_count(), 1);
+            assert_eq!(*x, 7);
+        } // drop, you can check stdout
     }
 }
