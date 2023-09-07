@@ -53,21 +53,21 @@ mod tests {
                 let y = x.clone();
                 {
                     let z = x.clone();
-                    assert_eq!(x.ref_count(), 3);
-                    assert_eq!(y.ref_count(), 3);
-                    assert_eq!(z.ref_count(), 3);
+                    assert_eq!(x.strong_count(), 3);
+                    assert_eq!(y.strong_count(), 3);
+                    assert_eq!(z.strong_count(), 3);
 
                     assert_eq!(*x, 7);
                     assert_eq!(*y, 7);
                     assert_eq!(*z, 7);
                 } // drop
-                assert_eq!(x.ref_count(), 2);
-                assert_eq!(y.ref_count(), 2);
+                assert_eq!(x.strong_count(), 2);
+                assert_eq!(y.strong_count(), 2);
 
                 assert_eq!(*x, 7);
                 assert_eq!(*y, 7);
             } // drop
-            assert_eq!(x.ref_count(), 1);
+            assert_eq!(x.strong_count(), 1);
             assert_eq!(*x, 7);
         } // drop, you can check stdout
     }

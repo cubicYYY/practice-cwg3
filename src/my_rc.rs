@@ -1,19 +1,25 @@
-use std::{
-    alloc::{alloc, dealloc, handle_alloc_error, Layout},
-    ops::Deref,
-};
+use std::{ops::Deref, ptr::NonNull};
 
 // Encapsulated data container
-pub struct MyRcBox<T> {
+struct MyRcBox<T> {
     rc: u32,
-    value: T,
+    value: Box<T>,
+}
+impl<T> Drop for MyRcBox<T> {
+    fn drop(&mut self) {
+        println!("[MyGC] Actual data dropped.");
+    }
 }
 
 impl<T> MyRcBox<T> {
     pub fn new(value: T) -> MyRcBox<T> {
-        MyRcBox::<T> { rc: 1, value }
+        MyRcBox::<T> {
+            rc: 1,
+            value: Box::new(value),
+        }
     }
     // Not atomic, not thread-safe.
+    // You can make them atomic to obtain thread-safety
     pub fn increment(&mut self) {
         self.rc += 1;
     }
@@ -26,35 +32,28 @@ impl<T> MyRcBox<T> {
 }
 
 pub struct MyRc<T> {
-    ptr: *mut MyRcBox<T>, // a have-to
+    boxed_ptr: NonNull<MyRcBox<T>>,
 }
 
 impl<T> MyRc<T> {
     pub fn new(value: T) -> MyRc<T> {
-        // We have to use unsafe, see README
-        unsafe {
-            let layout = Layout::new::<MyRcBox<T>>();
-            let ptr = alloc(layout);
-            if ptr.is_null() { // alloc failed!
-                handle_alloc_error(layout);
-            }
-            *(ptr as *mut MyRcBox<T>) = MyRcBox::<T>::new(value);
-            MyRc::<T> {
-                ptr: ptr as *mut MyRcBox<T>,
-            }
-        }
+        let ptr = NonNull::new(Box::into_raw(Box::new(MyRcBox::new(value))))
+            .expect("Allocation for boxed data failed!");
+        MyRc { boxed_ptr: ptr }
     }
 
-    pub fn ref_count(&self) -> u32 {
-        unsafe{(*self.ptr).ref_count()}
+    pub fn strong_count(&self) -> u32 {
+        unsafe { (*self.boxed_ptr.as_ptr()).ref_count() }
     }
 }
 
 impl<T> Clone for MyRc<T> {
     fn clone(&self) -> MyRc<T> {
         unsafe {
-            (*self.ptr).increment();
-            MyRc::<T> { ptr: self.ptr }
+            (*self.boxed_ptr.as_ptr()).increment();
+        }
+        MyRc {
+            boxed_ptr: self.boxed_ptr,
         }
     }
 }
@@ -62,11 +61,11 @@ impl<T> Clone for MyRc<T> {
 impl<T> Drop for MyRc<T> {
     fn drop(&mut self) {
         unsafe {
-            (*self.ptr).decrement();
-            if (*self.ptr).ref_count() == 0 {
-                let layout = Layout::new::<MyRcBox<T>>();
-                dealloc(self.ptr as *mut u8, layout);
-                print!("GC: Deallocated!");
+            (*self.boxed_ptr.as_ptr()).decrement();
+            if (*self.boxed_ptr.as_ptr()).ref_count() == 0 {
+                // Need GC
+
+                drop(Box::from_raw(self.boxed_ptr.as_ptr()));
             }
         }
     }
@@ -75,6 +74,6 @@ impl<T> Drop for MyRc<T> {
 impl<T> Deref for MyRc<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
-        unsafe { &(*self.ptr).value }
+        unsafe { (*self.boxed_ptr.as_ptr()).value.as_ref() }
     }
 }
